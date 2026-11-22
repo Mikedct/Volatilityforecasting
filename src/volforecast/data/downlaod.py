@@ -47,4 +47,36 @@ def clean_prices(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"Data untuk {ticker} tidak lengkap. Kolom hilang: {missing}")
-    
+
+    df = df.sort_index()
+
+    n_dup = int(df.index.duplicated().sum())
+    if n_dup:
+        logger.warning(f"Data untuk {ticker} memiliki {n_dup} duplikat. Menghapus duplikat.")
+        df = df[~df.index.duplicated(keep="last")]
+
+    n0 = len(df)
+    df = df.dropna
+    if len(df) < n0:
+        logger.warning(f"Data untuk {ticker} memiliki {n0 - len(df)} baris dengan nilai NaN. Menghapus baris tersebut.")
+
+    n0 = len(df)
+    df = df([(df[REQUIRED_COLUMNS] >= 0).all(axis=1)])
+    if len(df) < n0:
+        logger.warning(f"Data untuk {ticker} memiliki {n0 - len(df)} baris dengan nilai negatif. Menghapus baris tersebut.")
+
+    n0 = len(df)
+    df = df[df["HIGH"] >= df["LOW"]]
+    if len(df) < n0:
+        logger.warning(f"Data untuk {ticker} memiliki {n0 - len(df)} baris dengan HIGH < LOW. Menghapus baris tersebut.")
+
+    if df.empty:
+        raise ValueError(f"Data untuk {ticker} tidak memiliki baris valid setelah pembersihan.")
+
+    gaps = df.index.to_series().diff().dt.days
+    if (gaps > 10).any():
+        logger.warning(f"Data untuk {ticker} memiliki celah lebih dari 10 hari. Periksa data.",
+        ticker, 
+        int(gaps.max()),
+        )
+    return df
